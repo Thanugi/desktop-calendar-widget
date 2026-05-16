@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendar Widget</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      font-family: 'Pixelify Sans', sans-serif;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .widget {
+      background: #f4ebcc;
+      border: 1.5px solid #301908;
+      box-shadow: 0px 4px 4px rgba(0,0,0,0.25);
+      width: 280px;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    /* === SCREEN 1: Date View === */
+    #screen-date {
+      width: 280px;
+      height: 278px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .month-label {
+      font-size: 36px;
+      color: #301908;
+      letter-spacing: 2px;
+    }
+
+    .day-label {
+      font-size: 100px;
+      color: #301908;
+      line-height: 1;
+      text-shadow: 0px 4px 4px rgba(0,0,0,0.25);
+    }
+
+    /* === SCREEN 2: Events View === */
+    #screen-events {
+      display: none;
+      width: 280px;
+      padding: 20px 20px 44px 20px;
+      position: relative;
+    }
+
+    .events-date {
+      font-size: 13px;
+      color: #301908;
+      opacity: 0.6;
+      margin-bottom: 14px;
+      letter-spacing: 1px;
+    }
+
+    .event-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .bullet {
+      width: 6px;
+      height: 6px;
+      background: #301908;
+      margin-top: 7px;
+      flex-shrink: 0;
+    }
+
+    .event-text {
+      font-size: 13px;
+      color: #301908;
+      line-height: 1.4;
+    }
+
+    .event-time {
+      font-size: 11px;
+      color: #301908;
+      opacity: 0.7;
+    }
+
+    .no-events {
+      font-size: 13px;
+      color: #301908;
+      opacity: 0.6;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .loading {
+      font-size: 13px;
+      color: #301908;
+      opacity: 0.5;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    /* === NAV ARROW === */
+    .arrow-btn {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'Pixelify Sans', sans-serif;
+      font-size: 20px;
+      color: #301908;
+      -webkit-app-region: no-drag;
+      padding: 4px 6px;
+    }
+
+    .arrow-btn:hover { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div class="widget" id="widget">
+
+    <!-- Screen 1: Date -->
+    <div id="screen-date">
+      <div class="month-label" id="month">LOADING</div>
+      <div class="day-label" id="day">--</div>
+      <button class="arrow-btn" onclick="showEvents()">›</button>
+    </div>
+
+    <!-- Screen 2: Events -->
+    <div id="screen-events">
+      <div class="events-date" id="events-date"></div>
+      <div id="events-list"></div>
+      <button class="arrow-btn" onclick="showDate()">‹</button>
+    </div>
+
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron')
+
+    const MONTHS = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE',
+                    'JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER']
+
+    const MONTHS_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN',
+                          'JUL','AUG','SEP','OCT','NOV','DEC']
+
+    const today = new Date()
+    document.getElementById('month').textContent = MONTHS[today.getMonth()]
+    document.getElementById('day').textContent = String(today.getDate()).padStart(2, '0')
+    document.getElementById('events-date').textContent =
+      `${MONTHS_SHORT[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()}`
+
+    async function showEvents() {
+      document.getElementById('screen-date').style.display = 'none'
+      document.getElementById('screen-events').style.display = 'block'
+      await loadEvents()
+    }
+
+    function showDate() {
+      document.getElementById('screen-events').style.display = 'none'
+      document.getElementById('screen-date').style.display = 'flex'
+      ipcRenderer.invoke('resize-window', 280)
+    }
+
+    async function loadEvents() {
+      const list = document.getElementById('events-list')
+      list.innerHTML = '<div class="loading">Loading events...</div>'
+
+      const result = await ipcRenderer.invoke('get-events')
+
+      if (!result.success) {
+        list.innerHTML = `<div class="no-events">Error: ${result.error}</div>`
+        return
+      }
+
+      const events = result.events
+
+      if (events.length === 0) {
+        list.innerHTML = '<div class="no-events">No events today 🎉</div>'
+      } else {
+        list.innerHTML = events.map(e => `
+          <div class="event-item">
+            <div class="bullet"></div>
+            <div class="event-text">
+              <div class="event-time">${e.time}</div>
+              ${e.title}
+            </div>
+          </div>
+        `).join('')
+      }
+
+      // Auto-resize window to fit content
+      setTimeout(() => {
+        const newHeight = document.getElementById('widget').offsetHeight + 2
+        ipcRenderer.invoke('resize-window', newHeight)
+      }, 100)
+    }
+  </script>
+</body>
+</html>
